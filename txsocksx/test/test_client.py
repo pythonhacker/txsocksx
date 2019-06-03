@@ -85,7 +85,7 @@ class AuthAdditionWrapper(object):
 
     def auth_addition(self, *a):
         self.additionArgs = a
-        # Py3k fixes
+        # PY3KPORT: Py2-3 compatible port using six                                 
         self.sender.transport.write(six.b('addition!'))
         self.currentRule = 'authAddition'
 
@@ -115,6 +115,7 @@ class TestSOCKS5Client(unittest.TestCase):
         return fac, proto
 
     def test_initialHandshake(self):
+        # PY3KPORT: Py2-3 compatible port using six                                                 
         # This is sometimes coming a b'\x05\x02\x00\x02' and sometimes
         # as b'\x05\x02\x02\x00' in Python3!
         fac, proto = self.makeProto(methods={c.AUTH_LOGIN: (), c.AUTH_ANONYMOUS: ()})
@@ -122,8 +123,6 @@ class TestSOCKS5Client(unittest.TestCase):
         value = sorted(six.ensure_text(proto.transport.value()))
         self.assertEqual(value, ['\x00', '\x02', '\x02', '\x05'])
         
-        print(value)
-
         fac, proto = self.makeProto(methods={c.AUTH_LOGIN: ()})
         self.assertEqual(proto.transport.value(), six.b('\x05\x01\x02'))
 
@@ -143,6 +142,7 @@ class TestSOCKS5Client(unittest.TestCase):
         fac, proto = self.makeProto(methods={c.AUTH_LOGIN: ('spam', 'eggs')})
         proto.transport.clear()
         proto.dataReceived('\x05\x02')
+        # PY3KPORT: Py2-3 compatible port using six                                         
         self.assertEqual(proto.transport.value(), six.ensure_binary('\x01\x04spam\x04eggs'))
 
     def test_loginAuthAccepted(self):
@@ -164,30 +164,36 @@ class TestSOCKS5Client(unittest.TestCase):
         fac, proto = self.makeProto('host', 0x47)
         proto.transport.clear()
         proto.dataReceived('\x05\x00')
+        # PY3KPORT: Py2-3 compatible port using six                                                 
         self.assertEqual(proto.transport.value(),
                          six.b('\x05\x01\x00\x03\x04host\x00\x47'))
 
         fac, proto = self.makeProto('longerhost', 0x9494)
         proto.transport.clear()
         proto.dataReceived('\x05\x00')
+        # PY3KPORT: Py2-3 compatible port using six                                                 
         self.assertEqual(proto.transport.value(),
                          six.b('\x05\x01\x00\x03\x0alongerhost\x94\x94'))
 
     def test_handshakeEatsEnoughBytes(self):
         fac, proto = self.makeProto()
         proto.dataReceived('\x05\x00\x05\x00\x00\x01444422xxxxx')
+        # PY3KPORT: Py2-3 compatible port using six                                                 
         self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
         fac, proto = self.makeProto()
         proto.dataReceived('\x05\x00\x05\x00\x00\x04666666666666666622xxxxx')
+        # PY3KPORT: Py2-3 compatible port using six                                                 
         self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
         fac, proto = self.makeProto()
         proto.dataReceived('\x05\x00\x05\x00\x00\x03\x08somehost22xxxxx')
+        # PY3KPORT: Py2-3 compatible port using six                                                 
         self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
         fac, proto = self.makeProto()
         proto.dataReceived('\x05\x00\x05\x00\x00\x03\x0022xxxxx')
+        # PY3KPORT: Py2-3 compatible port using six                                                 
         self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
     def test_connectionRequestError(self):
@@ -202,6 +208,7 @@ class TestSOCKS5Client(unittest.TestCase):
         for c in '\x05\x00\x05\x00\x00\x01444422xxxxx':
             proto.dataReceived(c)
 
+        # PY3KPORT: Py2-3 compatible port using six                                         
         self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
     def test_connectionLostEarly(self):
@@ -226,6 +233,7 @@ class TestSOCKS5Client(unittest.TestCase):
         proto.connectionLost(connectionLostFailure)
         # import pdb;pdb.set_trace()      
         self.assertEqual(fac.accum.closedReason, connectionLostFailure)
+        # PY3KPORT: Py2-3 compatible port using six                                                 
         self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
     def test_authAddition(self):
@@ -233,17 +241,20 @@ class TestSOCKS5Client(unittest.TestCase):
             _protoClass=AdditionAuthSOCKS5Client, methods={'A': ('x', 'y')})
         proto.transport.clear()
         proto.dataReceived('\x05A')
+        # PY3KPORT: Py2-3 compatible port using six                                                 
         self.assertEqual(proto.transport.value(), six.b('addition!'))
         self.assertEqual(proto.receiver.additionArgs, ('x', 'y'))
         proto.dataReceived('additionz')
         self.assertEqual(proto.receiver.additionParsed, 'z')
         proto.dataReceived('\x05\x00\x00\x01444422xxxxx')
+        # PY3KPORT: Py2-3 compatible port using six                                                 
         self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
     def test_dataSentByPeer(self):
         fac, proto = self.makeProto()
         proto.dataReceived('\x05\x00\x05\x00\x00\x01444422')
         proto.transport.clear()
+        # PY3KPORT: Py2-3 compatible port using six                                                 
         fac.accum.transport.write(six.b('xxxxx'))
         self.assertEqual(proto.transport.value(), six.b('xxxxx'))
 
@@ -272,23 +283,28 @@ class TestSOCKS4Client(unittest.TestCase):
 
     def test_initialHandshake(self):
         fac, proto = self.makeProto(host='0.0.0.0', port=0x1234)
+        # PY3KPORT: Py2-3 compatible port using six                                                 
         self.assertEqual(proto.transport.value(), six.b('\x04\x01\x12\x34\x00\x00\x00\x00\x00'))
 
     def test_initialHandshakeWithHostname(self):
         fac, proto = self.makeProto(host='example.com', port=0x4321)
+        # PY3KPORT: Py2-3 compatible port using six                                                 
         self.assertEqual(proto.transport.value(), six.b('\x04\x01\x43\x21\x00\x00\x00\x01\x00example.com\x00'))
 
     def test_initialHandshakeWithUser(self):
         fac, proto = self.makeProto(host='0.0.0.0', port=0x1234, user='spam')
+        # PY3KPORT: Py2-3 compatible port using six                                                 
         self.assertEqual(proto.transport.value(), six.b('\x04\x01\x12\x34\x00\x00\x00\x00spam\x00'))
 
     def test_initialHandshakeWithUserAndHostname(self):
         fac, proto = self.makeProto(host='spam.com', port=0x1234, user='spam')
+        # PY3KPORT: Py2-3 compatible port using six                                         
         self.assertEqual(proto.transport.value(), six.b('\x04\x01\x12\x34\x00\x00\x00\x01spam\x00spam.com\x00'))
 
     def test_handshakeEatsEnoughBytes(self):
         fac, proto = self.makeProto()
         proto.dataReceived('\x00\x5a\x00\x00\x00\x00\x00\x00xxxxx')
+        # PY3KPORT: Py2-3 compatible port using six                                                 
         self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
     def test_connectionRequestError(self):
@@ -301,8 +317,8 @@ class TestSOCKS4Client(unittest.TestCase):
     def test_buffering(self):
         fac, proto = self.makeProto()
         for c in '\x00\x5a\x00\x00\x00\x00\x00\x00xxxxx':
-            print('Sending',c)
             proto.dataReceived(c)
+        # PY3KPORT: Py2-3 compatible port using six                                                     
         self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
     def test_connectionLostEarly(self):
@@ -327,12 +343,14 @@ class TestSOCKS4Client(unittest.TestCase):
         proto.dataReceived('\x00\x5a\x00\x00\x00\x00\x00\x00xxxxx')
         proto.connectionLost(connectionLostFailure)
         self.assertEqual(fac.accum.closedReason, connectionLostFailure)
+        # PY3KPORT: Py2-3 compatible port using six                                                 
         self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
     def test_dataSentByPeer(self):
         fac, proto = self.makeProto()
         proto.dataReceived('\x00\x5a\x00\x00\x00\x00\x00\x00')
         proto.transport.clear()
+        # PY3KPORT: Py2-3 compatible port using six                                                         
         fac.accum.transport.write(six.b('xxxxx'))
         self.assertEqual(proto.transport.value(), six.b('xxxxx'))
 
@@ -405,15 +423,21 @@ class TestSOCKS5ClientFactory(_TestSOCKSClientFactoryCommon, unittest.TestCase):
 
     def test_defaultFactory(self):
         fac, proto = self.makeProto('', 0, None)
+        # PY3KPORT: Py2-3 compatible port using six                                                         
         self.assertEqual(proto.transport.value(), six.b('\x05\x01\x00'))
 
     def test_anonymousAndLoginAuth(self):
+        # PY3KPORT: Py2-3 compatible port using six                                                 
+        # This is sometimes coming a b'\x05\x02\x00\x02' and sometimes
+        # as b'\x05\x02\x02\x00' in Python3!        
         fac, proto = self.makeProto('', 0, None, methods={'anonymous': (), 'login': ()})
         value = sorted(six.ensure_text(proto.transport.value()))
+        # So test just checks for the sorted value      
         self.assertEqual(value, ['\x00', '\x02', '\x02', '\x05'])       
 
     def test_justLoginAuth(self):
         fac, proto = self.makeProto('', 0, None, methods={'login': ()})
+        # PY3KPORT: Py2-3 compatible port using six                                                                                 
         self.assertEqual(proto.transport.value(), six.b('\x05\x01\x02'))
 
     def test_noAuthMethodsFails(self):
@@ -424,7 +448,8 @@ class TestSOCKS5ClientFactory(_TestSOCKSClientFactoryCommon, unittest.TestCase):
         fac, proto = self.makeProto('', 0, None, methods={'login': ('spam', 'eggs')})
         proto.transport.clear()
         proto.dataReceived('\x05\x02')
-        self.assertEqual(proto.transport.value(), b'\x01\x04spam\x04eggs')
+        # PY3KPORT: Py2-3 compatible port using six                                                                                 
+        self.assertEqual(proto.transport.value(), six.b('\x01\x04spam\x04eggs'))
 
     def test_loginAuthAccepted(self):
         fac, proto = self.makeProto('', 0, None, methods={'login': ('spam', 'eggs')})
@@ -437,6 +462,7 @@ class TestSOCKS5ClientFactory(_TestSOCKSClientFactoryCommon, unittest.TestCase):
         wrappedFac = FakeFactory()
         fac, proto = self.makeProto('', 0, wrappedFac)
         proto.dataReceived('\x05\x00\x05\x00\x00\x01444422xxxxx')
+        # PY3KPORT: Py2-3 compatible port using six                                                                                 
         self.assertEqual(wrappedFac.proto.data, six.b('xxxxx'))
 
     def test_noProtocolFromWrappedFactory(self):
@@ -451,6 +477,7 @@ class TestSOCKS5ClientFactory(_TestSOCKSClientFactoryCommon, unittest.TestCase):
         fac, proto = self.makeProto('', 0, wrappedFac)
         proto.dataReceived('\x05\x00\x05\x00\x00\x01444422')
         proto.transport.clear()
+        # PY3KPORT: Py2-3 compatible port using six                                                                                 
         wrappedFac.proto.transport.write(six.b('xxxxx'))
         self.assertEqual(proto.transport.value(), six.b('xxxxx'))
 
@@ -460,20 +487,24 @@ class TestSOCKS4ClientFactory(_TestSOCKSClientFactoryCommon, unittest.TestCase):
 
     def test_defaultFactory(self):
         fac, proto = self.makeProto('127.0.0.1', 0, None)
+        # PY3KPORT: Py2-3 compatible port using six                                                                                 
         self.assertEqual(proto.transport.value(), six.b('\x04\x01\x00\x00\x7f\x00\x00\x01\x00'))
 
     def test_hostname(self):
         fac, proto = self.makeProto('spam.com', 0, None)
+        # PY3KPORT: Py2-3 compatible port using six                                                                                 
         self.assertEqual(proto.transport.value(), six.b('\x04\x01\x00\x00\x00\x00\x00\x01\x00spam.com\x00'))
 
     def test_differentUser(self):
         fac, proto = self.makeProto('127.0.0.1', 0, None, 'spam')
+        # PY3KPORT: Py2-3 compatible port using six                                                                                 
         self.assertEqual(proto.transport.value(), six.b('\x04\x01\x00\x00\x7f\x00\x00\x01spam\x00'))
 
     def test_buildingWrappedFactory(self):
         wrappedFac = FakeFactory()
         fac, proto = self.makeProto('127.0.0.1', 0, wrappedFac)
         proto.dataReceived('\x00\x5a\x00\x00\x00\x00\x00\x00xxxxx')
+        # PY3KPORT: Py2-3 compatible port using six                                                                                 
         self.assertEqual(wrappedFac.proto.data, six.b('xxxxx'))
 
     def test_noProtocolFromWrappedFactory(self):
@@ -507,19 +538,26 @@ class TestSOCKS5ClientEndpoint(unittest.TestCase):
         proxy = FakeEndpoint()
         endpoint = client.SOCKS5ClientEndpoint('', 0, proxy)
         endpoint.connect(None)
+        # PY3KPORT: Py2-3 compatible port using six                                                                                 
         self.assertEqual(proxy.transport.value(), six.ensure_binary('\x05\x01\x00'))
+        
 
     def test_anonymousAndLoginAuth(self):
         proxy = FakeEndpoint()
         endpoint = client.SOCKS5ClientEndpoint('', 0, proxy, methods={'anonymous': (), 'login': ()})
         endpoint.connect(None)
+        # PY3KPORT: Py2-3 compatible port using six                                                                         
+        # This is sometimes coming a b'\x05\x02\x00\x02' and sometimes
+        # as b'\x05\x02\x02\x00' in Python3!        
         value = sorted(six.ensure_text(proxy.transport.value()))
+        # So test just checks for the sorted value      
         self.assertEqual(value, ['\x00', '\x02', '\x02', '\x05'])       
 
     def test_justLoginAuth(self):
         proxy = FakeEndpoint()
         endpoint = client.SOCKS5ClientEndpoint('', 0, proxy, methods={'login': ()})
         endpoint.connect(None)
+        # PY3KPORT: Py2-3 compatible port using six                                                                         
         self.assertEqual(proxy.transport.value(), six.ensure_binary('\x05\x01\x02'))
 
     def test_noAuthMethodsFails(self):
@@ -533,6 +571,7 @@ class TestSOCKS5ClientEndpoint(unittest.TestCase):
         d = endpoint.connect(wrappedFac)
         proxy.proto.dataReceived('\x05\x00\x05\x00\x00\x01444422xxxxx')
         d.addCallback(self.assertEqual, wrappedFac.proto)
+        # PY3KPORT: Py2-3 compatible port using six                                                                         
         self.assertEqual(wrappedFac.proto.data, six.b('xxxxx'))
         return d
 
@@ -543,6 +582,7 @@ class TestSOCKS5ClientEndpoint(unittest.TestCase):
         endpoint.connect(wrappedFac)
         proxy.proto.dataReceived('\x05\x00\x05\x00\x00\x01444422')
         proxy.proto.transport.clear()
+        # PY3KPORT: Py2-3 compatible port using six                                                                         
         wrappedFac.proto.transport.write(six.b('xxxxx'))
         self.assertEqual(proxy.proto.transport.value(), six.b('xxxxx'))
 
@@ -558,13 +598,14 @@ class TestSOCKS4ClientEndpoint(unittest.TestCase):
         proxy = FakeEndpoint()
         endpoint = client.SOCKS4ClientEndpoint('127.0.0.1', 0, proxy)
         endpoint.connect(None)
+        # PY3KPORT: Py2-3 compatible port using six                                                                         
         self.assertEqual(proxy.transport.value(), six.ensure_binary('\x04\x01\x00\x00\x7f\x00\x00\x01\x00'))
 
     def test_hostname(self):
         proxy = FakeEndpoint()
         endpoint = client.SOCKS4ClientEndpoint('spam.com', 0, proxy)
         endpoint.connect(None)
-        # Py3k fixes
+        # PY3KPORT: Py2-3 compatible port using six                                                                 
         self.assertEqual(proxy.transport.value(),
                          six.ensure_binary('\x04\x01\x00\x00\x00\x00\x00\x01\x00spam.com\x00'))
 
@@ -573,6 +614,7 @@ class TestSOCKS4ClientEndpoint(unittest.TestCase):
         endpoint = client.SOCKS4ClientEndpoint('127.0.0.1', 0, proxy, 'spam')
         endpoint.connect(None)
         # Py3k fixes
+        # PY3KPORT: Py2-3 compatible port using six                                                         
         self.assertEqual(proxy.transport.value(),
                          six.ensure_binary('\x04\x01\x00\x00\x7f\x00\x00\x01spam\x00'))
 
@@ -583,6 +625,7 @@ class TestSOCKS4ClientEndpoint(unittest.TestCase):
         d = endpoint.connect(wrappedFac)
         proxy.proto.dataReceived('\x00\x5a\x00\x00\x00\x00\x00\x00xxxxx')
         d.addCallback(self.assertEqual, wrappedFac.proto)
+        # PY3KPORT: Py2-3 compatible port using six                                                         
         self.assertEqual(wrappedFac.proto.data, six.b('xxxxx'))
         return d
 
@@ -593,6 +636,7 @@ class TestSOCKS4ClientEndpoint(unittest.TestCase):
         endpoint.connect(wrappedFac)
         proxy.proto.dataReceived('\x00\x5a\x00\x00\x00\x00\x00\x00')
         proxy.proto.transport.clear()
+        # PY3KPORT: Py2-3 compatible port using six                                                 
         wrappedFac.proto.transport.write(six.b('xxxxx'))
         self.assertEqual(proxy.proto.transport.value(), six.b('xxxxx'))
 
