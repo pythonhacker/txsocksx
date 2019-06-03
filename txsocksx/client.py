@@ -21,7 +21,7 @@ from txsocksx import grammar
 
 
 def socks_host(host):
-    # Py3k fixes
+    # PY3KPORT: Py2-3 compatible port using six
     return six.b(chr(c.ATYP_DOMAINNAME) + chr(len(host)) + host)
 
 def validateSOCKS4aHost(host):
@@ -30,6 +30,7 @@ def validateSOCKS4aHost(host):
     except socket.error:
         return
 
+    # PY3KPORT: Py2-3 compatible port using six
     if six.ensure_binary(host[:3]) == b'\0\0\0' and six.indexbytes(host, 3) != 0:
         raise ValueError('SOCKS4a reserves addresses 0.0.0.1-0.0.0.255')
 
@@ -75,6 +76,7 @@ class _SOCKSReceiver(object):
             self.sender.transport.protocol = other
 
     def dataReceived(self, data):
+        # PY3KPORT: Py2-3 compatible port using six     
         self.otherProtocol.dataReceived(six.ensure_binary(data))
 
     def finishParsing(self, reason):
@@ -89,11 +91,12 @@ class SOCKS5Sender(object):
         self.transport = transport
 
     def sendAuthMethods(self, methods):
-        # Py3fix
+        # PY3KPORT: Py2-3 compatible port using six     
         self.transport.write(
             struct.pack('!BB', c.VER_SOCKS5, len(methods)) + six.b(''.join(methods)))
 
     def sendLogin(self, username, password):
+        # PY3KPORT: Py2-3 compatible port using six             
         try:
             data = six.b('\x01'
                          + chr(len(username)) + username
@@ -101,7 +104,6 @@ class SOCKS5Sender(object):
             self.transport.write(data)
         except Exception as e:
             err = e
-            import pdb;pdb.set_trace()
 
     def sendRequest(self, command, host, port):
         data = struct.pack('!BBB', c.VER_SOCKS5, command, c.RSV)
@@ -131,10 +133,6 @@ class SOCKS5Receiver(_SOCKSReceiver):
     def __init__(self, sender):
         self.sender = sender
 
-    def encode(self, packed):
-        # Encode a packed IP address to both 2 and 3 correctly
-        return six.ensure_binary(packed)
-    
     def prepareParsing(self, parser):
         self.factory = parser.factory
         self.sender.sendAuthMethods(self.factory.methods)
@@ -189,6 +187,7 @@ class SOCKS5ClientFactory(_SOCKSClientFactory):
         self.host = host
         self.port = port
         self.proxiedFactory = proxiedFactory
+        # PY3KPORT: Replaced iteritems -> items
         self.methods = dict(
             (self.authMethodMap[method], value)
             for method, value in sorted(methods.items()))
@@ -269,11 +268,12 @@ class SOCKS4Sender(object):
             # this returns bytes
             host = socket.inet_pton(socket.AF_INET, host)
         except socket.error:
+            # PY3KPORT: Py2-3 compatible port using six                 
             host, suffix = six.b('\0\0\0\1'), six.ensure_binary(host) + b'\0'
         else:
             suffix = six.b('')
 
-        # Py3k fixes
+        # PY3KPORT: Py2-3 compatible port using six                         
         rest = host + six.ensure_binary(user) + b'\0' + suffix
         self.transport.write(data + rest)
 
@@ -285,10 +285,6 @@ class SOCKS4Receiver(_SOCKSReceiver):
     def __init__(self, sender):
         self.sender = sender
 
-    def encode(self, packed):
-        # Encode a packed IP address to both 2 and 3 correctly
-        return six.ensure_binary(packed)
-    
     def prepareParsing(self, parser):
         self.factory = parser.factory
         self.sender.sendRequest(self.factory.host, self.factory.port, self.factory.user)
