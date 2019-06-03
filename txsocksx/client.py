@@ -8,24 +8,29 @@
 
 import socket
 import struct
+import six
 
 from parsley import makeProtocol, stack
 from twisted.internet import protocol, defer, interfaces
 from zope.interface import implementer
 
 import txsocksx.constants as c, txsocksx.errors as e
+import six
+
 from txsocksx import grammar
 
 
 def socks_host(host):
-    return chr(c.ATYP_DOMAINNAME) + chr(len(host)) + host
+    # Py3k fixes
+    return six.b(chr(c.ATYP_DOMAINNAME) + chr(len(host)) + host)
 
 def validateSOCKS4aHost(host):
     try:
         host = socket.inet_pton(socket.AF_INET, host)
     except socket.error:
         return
-    if host[:3] == '\0\0\0' and host[3] != '\0':
+
+    if six.ensure_binary(host[:3]) == b'\0\0\0' and six.indexbytes(host, 3) != 0:
         raise ValueError('SOCKS4a reserves addresses 0.0.0.1-0.0.0.255')
 
 
@@ -53,7 +58,7 @@ class _SOCKSClientFactory(protocol.ClientFactory):
 
     def proxyConnectionEstablished(self, proxyProtocol):
         proto = self.proxiedFactory.buildProtocol(
-            proxyProtocol.sender.transport.getPeer())
+             proxyProtocol.sender.transport.getPeer())
         if proto is None:
             self.deferred.cancel()
             return
@@ -70,7 +75,7 @@ class _SOCKSReceiver(object):
             self.sender.transport.protocol = other
 
     def dataReceived(self, data):
-        self.otherProtocol.dataReceived(data)
+        self.otherProtocol.dataReceived(six.ensure_binary(data))
 
     def finishParsing(self, reason):
         if self.otherProtocol:
@@ -84,14 +89,19 @@ class SOCKS5Sender(object):
         self.transport = transport
 
     def sendAuthMethods(self, methods):
+        # Py3fix
         self.transport.write(
-            struct.pack('!BB', c.VER_SOCKS5, len(methods)) + ''.join(methods))
+            struct.pack('!BB', c.VER_SOCKS5, len(methods)) + six.b(''.join(methods)))
 
     def sendLogin(self, username, password):
-        self.transport.write(
-            '\x01'
-            + chr(len(username)) + username
-            + chr(len(password)) + password)
+        try:
+            data = six.b('\x01'
+                         + chr(len(username)) + username
+                         + chr(len(password)) + password)
+            self.transport.write(data)
+        except Exception as e:
+            err = e
+            import pdb;pdb.set_trace()
 
     def sendRequest(self, command, host, port):
         data = struct.pack('!BBB', c.VER_SOCKS5, command, c.RSV)
@@ -121,6 +131,10 @@ class SOCKS5Receiver(_SOCKSReceiver):
     def __init__(self, sender):
         self.sender = sender
 
+    def encode(self, packed):
+        # Encode a packed IP address to both 2 and 3 correctly
+        return six.ensure_binary(packed)
+    
     def prepareParsing(self, parser):
         self.factory = parser.factory
         self.sender.sendAuthMethods(self.factory.methods)
@@ -177,7 +191,7 @@ class SOCKS5ClientFactory(_SOCKSClientFactory):
         self.proxiedFactory = proxiedFactory
         self.methods = dict(
             (self.authMethodMap[method], value)
-            for method, value in methods.iteritems())
+            for method, value in sorted(methods.items()))
         self.deferred = defer.Deferred(self._cancel)
 
 
@@ -252,12 +266,16 @@ class SOCKS4Sender(object):
     def sendRequest(self, host, port, user):
         data = struct.pack('!BBH', c.VER_SOCKS4, c.CMD_CONNECT, port)
         try:
+            # this returns bytes
             host = socket.inet_pton(socket.AF_INET, host)
         except socket.error:
-            host, suffix = '\0\0\0\1', host + '\0'
+            host, suffix = six.b('\0\0\0\1'), six.ensure_binary(host) + b'\0'
         else:
-            suffix = ''
-        self.transport.write(data + host + user + '\0' + suffix)
+            suffix = six.b('')
+
+        # Py3k fixes
+        rest = host + six.ensure_binary(user) + b'\0' + suffix
+        self.transport.write(data + rest)
 
 
 class SOCKS4Receiver(_SOCKSReceiver):
@@ -267,6 +285,10 @@ class SOCKS4Receiver(_SOCKSReceiver):
     def __init__(self, sender):
         self.sender = sender
 
+    def encode(self, packed):
+        # Encode a packed IP address to both 2 and 3 correctly
+        return six.ensure_binary(packed)
+    
     def prepareParsing(self, parser):
         self.factory = parser.factory
         self.sender.sendRequest(self.factory.host, self.factory.port, self.factory.user)
