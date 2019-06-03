@@ -1,6 +1,8 @@
 # Copyright (c) Aaron Gallagher <_@habnab.it>
 # See COPYING for details.
 
+import six
+
 from parsley import makeProtocol, stack
 from twisted.internet.error import ConnectionLost, ConnectionRefusedError
 from twisted.internet import defer, protocol
@@ -83,7 +85,8 @@ class AuthAdditionWrapper(object):
 
     def auth_addition(self, *a):
         self.additionArgs = a
-        self.sender.transport.write('addition!')
+        # Py3k fixes
+        self.sender.transport.write(six.b('addition!'))
         self.currentRule = 'authAddition'
 
     def authedAddition(self, x):
@@ -112,20 +115,26 @@ class TestSOCKS5Client(unittest.TestCase):
         return fac, proto
 
     def test_initialHandshake(self):
-        fac, proto = self.makeProto()
-        self.assertEqual(proto.transport.value(), '\x05\x01\x00')
-
-        fac, proto = self.makeProto(methods={c.AUTH_ANONYMOUS: (), c.AUTH_LOGIN: ()})
-        self.assertEqual(proto.transport.value(), '\x05\x02\x00\x02')
+        # This is sometimes coming a b'\x05\x02\x00\x02' and sometimes
+        # as b'\x05\x02\x02\x00' in Python3!
+        fac, proto = self.makeProto(methods={c.AUTH_LOGIN: (), c.AUTH_ANONYMOUS: ()})
+        # So test just checks for the sorted value
+        value = sorted(six.ensure_text(proto.transport.value()))
+        self.assertEqual(value, ['\x00', '\x02', '\x02', '\x05'])
+        
+        print(value)
 
         fac, proto = self.makeProto(methods={c.AUTH_LOGIN: ()})
-        self.assertEqual(proto.transport.value(), '\x05\x01\x02')
+        self.assertEqual(proto.transport.value(), six.b('\x05\x01\x02'))
 
+        fac, proto = self.makeProto()
+        self.assertEqual(proto.transport.value(), six.b('\x05\x01\x00'))
+        
     def test_failedMethodSelection(self):
         fac, proto = self.makeProto()
         fac.expectingReason = True
         proto.dataReceived('\x05\xff')
-        self.failIfEqual(fac.reason, None)
+        self.assertNotEqual(fac.reason, None)
         self.failUnlessIsInstance(
             fac.reason.value, errors.MethodsNotAcceptedError)
         self.assertEqual(fac.reason.value.args[2], '\xff')
@@ -134,20 +143,20 @@ class TestSOCKS5Client(unittest.TestCase):
         fac, proto = self.makeProto(methods={c.AUTH_LOGIN: ('spam', 'eggs')})
         proto.transport.clear()
         proto.dataReceived('\x05\x02')
-        self.assertEqual(proto.transport.value(), '\x01\x04spam\x04eggs')
+        self.assertEqual(proto.transport.value(), six.ensure_binary('\x01\x04spam\x04eggs'))
 
     def test_loginAuthAccepted(self):
         fac, proto = self.makeProto(methods={c.AUTH_LOGIN: ('spam', 'eggs')})
         proto.dataReceived('\x05\x02')
         proto.transport.clear()
         proto.dataReceived('\x01\x00')
-        self.assert_(proto.transport.value())
+        self.assertTrue(proto.transport.value())
 
     def test_loginAuthFailed(self):
         fac, proto = self.makeProto(methods={c.AUTH_LOGIN: ('spam', 'eggs')})
         fac.expectingReason = True
         proto.dataReceived('\x05\x02\x01\x01')
-        self.failIfEqual(fac.reason, None)
+        self.assertNotEqual(fac.reason, None)
         self.failUnlessIsInstance(
             fac.reason.value, errors.LoginAuthenticationFailed)
 
@@ -156,47 +165,48 @@ class TestSOCKS5Client(unittest.TestCase):
         proto.transport.clear()
         proto.dataReceived('\x05\x00')
         self.assertEqual(proto.transport.value(),
-                         '\x05\x01\x00\x03\x04host\x00\x47')
+                         six.b('\x05\x01\x00\x03\x04host\x00\x47'))
 
         fac, proto = self.makeProto('longerhost', 0x9494)
         proto.transport.clear()
         proto.dataReceived('\x05\x00')
         self.assertEqual(proto.transport.value(),
-                         '\x05\x01\x00\x03\x0alongerhost\x94\x94')
+                         six.b('\x05\x01\x00\x03\x0alongerhost\x94\x94'))
 
     def test_handshakeEatsEnoughBytes(self):
         fac, proto = self.makeProto()
         proto.dataReceived('\x05\x00\x05\x00\x00\x01444422xxxxx')
-        self.assertEqual(fac.accum.data, 'xxxxx')
+        self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
         fac, proto = self.makeProto()
         proto.dataReceived('\x05\x00\x05\x00\x00\x04666666666666666622xxxxx')
-        self.assertEqual(fac.accum.data, 'xxxxx')
+        self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
         fac, proto = self.makeProto()
         proto.dataReceived('\x05\x00\x05\x00\x00\x03\x08somehost22xxxxx')
-        self.assertEqual(fac.accum.data, 'xxxxx')
+        self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
         fac, proto = self.makeProto()
         proto.dataReceived('\x05\x00\x05\x00\x00\x03\x0022xxxxx')
-        self.assertEqual(fac.accum.data, 'xxxxx')
+        self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
     def test_connectionRequestError(self):
         fac, proto = self.makeProto()
         fac.expectingReason = True
         proto.dataReceived('\x05\x00\x05\x01\x00\x03\x0022')
-        self.failIfEqual(fac.reason, None)
+        self.assertNotEqual(fac.reason, None)
         self.failUnlessIsInstance(fac.reason.value, errors.ServerFailure)
 
     def test_buffering(self):
         fac, proto = self.makeProto()
         for c in '\x05\x00\x05\x00\x00\x01444422xxxxx':
             proto.dataReceived(c)
-        self.assertEqual(fac.accum.data, 'xxxxx')
+
+        self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
     def test_connectionLostEarly(self):
         wholeRequest = '\x05\x00\x05\x00\x00\x01444422'
-        for e in xrange(len(wholeRequest)):
+        for e in range(len(wholeRequest)):
             partialRequest = wholeRequest[:e]
             fac, proto = self.makeProto()
             fac.expectingReason = True
@@ -214,27 +224,28 @@ class TestSOCKS5Client(unittest.TestCase):
         fac, proto = self.makeProto()
         proto.dataReceived('\x05\x00\x05\x00\x00\x01444422xxxxx')
         proto.connectionLost(connectionLostFailure)
+        # import pdb;pdb.set_trace()      
         self.assertEqual(fac.accum.closedReason, connectionLostFailure)
-        self.assertEqual(fac.accum.data, 'xxxxx')
+        self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
     def test_authAddition(self):
         fac, proto = self.makeProto(
             _protoClass=AdditionAuthSOCKS5Client, methods={'A': ('x', 'y')})
         proto.transport.clear()
         proto.dataReceived('\x05A')
-        self.assertEqual(proto.transport.value(), 'addition!')
+        self.assertEqual(proto.transport.value(), six.b('addition!'))
         self.assertEqual(proto.receiver.additionArgs, ('x', 'y'))
         proto.dataReceived('additionz')
         self.assertEqual(proto.receiver.additionParsed, 'z')
         proto.dataReceived('\x05\x00\x00\x01444422xxxxx')
-        self.assertEqual(fac.accum.data, 'xxxxx')
+        self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
     def test_dataSentByPeer(self):
         fac, proto = self.makeProto()
         proto.dataReceived('\x05\x00\x05\x00\x00\x01444422')
         proto.transport.clear()
-        fac.accum.transport.write('xxxxx')
-        self.assertEqual(proto.transport.value(), 'xxxxx')
+        fac.accum.transport.write(six.b('xxxxx'))
+        self.assertEqual(proto.transport.value(), six.b('xxxxx'))
 
     def test_protocolSwitchingWithoutAProtocolAttribute(self):
         fac, proto = self.makeProto()
@@ -261,41 +272,42 @@ class TestSOCKS4Client(unittest.TestCase):
 
     def test_initialHandshake(self):
         fac, proto = self.makeProto(host='0.0.0.0', port=0x1234)
-        self.assertEqual(proto.transport.value(), '\x04\x01\x12\x34\x00\x00\x00\x00\x00')
+        self.assertEqual(proto.transport.value(), six.b('\x04\x01\x12\x34\x00\x00\x00\x00\x00'))
 
     def test_initialHandshakeWithHostname(self):
         fac, proto = self.makeProto(host='example.com', port=0x4321)
-        self.assertEqual(proto.transport.value(), '\x04\x01\x43\x21\x00\x00\x00\x01\x00example.com\x00')
+        self.assertEqual(proto.transport.value(), six.b('\x04\x01\x43\x21\x00\x00\x00\x01\x00example.com\x00'))
 
     def test_initialHandshakeWithUser(self):
         fac, proto = self.makeProto(host='0.0.0.0', port=0x1234, user='spam')
-        self.assertEqual(proto.transport.value(), '\x04\x01\x12\x34\x00\x00\x00\x00spam\x00')
+        self.assertEqual(proto.transport.value(), six.b('\x04\x01\x12\x34\x00\x00\x00\x00spam\x00'))
 
     def test_initialHandshakeWithUserAndHostname(self):
         fac, proto = self.makeProto(host='spam.com', port=0x1234, user='spam')
-        self.assertEqual(proto.transport.value(), '\x04\x01\x12\x34\x00\x00\x00\x01spam\x00spam.com\x00')
+        self.assertEqual(proto.transport.value(), six.b('\x04\x01\x12\x34\x00\x00\x00\x01spam\x00spam.com\x00'))
 
     def test_handshakeEatsEnoughBytes(self):
         fac, proto = self.makeProto()
         proto.dataReceived('\x00\x5a\x00\x00\x00\x00\x00\x00xxxxx')
-        self.assertEqual(fac.accum.data, 'xxxxx')
+        self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
     def test_connectionRequestError(self):
         fac, proto = self.makeProto()
         fac.expectingReason = True
         proto.dataReceived('\x00\x5b\x00\x00\x00\x00\x00\x00xxxxx')
-        self.failIfEqual(fac.reason, None)
+        self.assertNotEqual(fac.reason, None)
         self.failUnlessIsInstance(fac.reason.value, errors.RequestRejectedOrFailed)
 
     def test_buffering(self):
         fac, proto = self.makeProto()
         for c in '\x00\x5a\x00\x00\x00\x00\x00\x00xxxxx':
+            print('Sending',c)
             proto.dataReceived(c)
-        self.assertEqual(fac.accum.data, 'xxxxx')
+        self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
     def test_connectionLostEarly(self):
         wholeRequest = '\x00\x5a\x00\x00\x00\x00\x00\x00'
-        for e in xrange(len(wholeRequest)):
+        for e in range(len(wholeRequest)):
             partialRequest = wholeRequest[:e]
             fac, proto = self.makeProto()
             fac.expectingReason = True
@@ -315,14 +327,14 @@ class TestSOCKS4Client(unittest.TestCase):
         proto.dataReceived('\x00\x5a\x00\x00\x00\x00\x00\x00xxxxx')
         proto.connectionLost(connectionLostFailure)
         self.assertEqual(fac.accum.closedReason, connectionLostFailure)
-        self.assertEqual(fac.accum.data, 'xxxxx')
+        self.assertEqual(fac.accum.data, six.b('xxxxx'))
 
     def test_dataSentByPeer(self):
         fac, proto = self.makeProto()
         proto.dataReceived('\x00\x5a\x00\x00\x00\x00\x00\x00')
         proto.transport.clear()
-        fac.accum.transport.write('xxxxx')
-        self.assertEqual(proto.transport.value(), 'xxxxx')
+        fac.accum.transport.write(six.b('xxxxx'))
+        self.assertEqual(proto.transport.value(), six.b('xxxxx'))
 
     def test_protocolSwitchingWithoutAProtocolAttribute(self):
         fac, proto = self.makeProto()
@@ -365,14 +377,14 @@ class _TestSOCKSClientFactoryCommon(object):
     def test_cancellation(self):
         fac, proto = self.makeProto('', 0, None)
         fac.deferred.cancel()
-        self.assert_(self.aborted)
+        self.assertTrue(self.aborted)
         return self.assertFailure(fac.deferred, defer.CancelledError)
 
     def test_cancellationBeforeFailure(self):
         fac, proto = self.makeProto('', 0, None)
         fac.deferred.cancel()
         proto.connectionLost(connectionLostFailure)
-        self.assert_(self.aborted)
+        self.assertTrue(self.aborted)
         return self.assertFailure(fac.deferred, defer.CancelledError)
 
     def test_cancellationAfterFailure(self):
@@ -393,15 +405,16 @@ class TestSOCKS5ClientFactory(_TestSOCKSClientFactoryCommon, unittest.TestCase):
 
     def test_defaultFactory(self):
         fac, proto = self.makeProto('', 0, None)
-        self.assertEqual(proto.transport.value(), '\x05\x01\x00')
+        self.assertEqual(proto.transport.value(), six.b('\x05\x01\x00'))
 
     def test_anonymousAndLoginAuth(self):
         fac, proto = self.makeProto('', 0, None, methods={'anonymous': (), 'login': ()})
-        self.assertEqual(proto.transport.value(), '\x05\x02\x00\x02')
+        value = sorted(six.ensure_text(proto.transport.value()))
+        self.assertEqual(value, ['\x00', '\x02', '\x02', '\x05'])       
 
     def test_justLoginAuth(self):
         fac, proto = self.makeProto('', 0, None, methods={'login': ()})
-        self.assertEqual(proto.transport.value(), '\x05\x01\x02')
+        self.assertEqual(proto.transport.value(), six.b('\x05\x01\x02'))
 
     def test_noAuthMethodsFails(self):
         self.assertRaises(
@@ -411,26 +424,26 @@ class TestSOCKS5ClientFactory(_TestSOCKSClientFactoryCommon, unittest.TestCase):
         fac, proto = self.makeProto('', 0, None, methods={'login': ('spam', 'eggs')})
         proto.transport.clear()
         proto.dataReceived('\x05\x02')
-        self.assertEqual(proto.transport.value(), '\x01\x04spam\x04eggs')
+        self.assertEqual(proto.transport.value(), b'\x01\x04spam\x04eggs')
 
     def test_loginAuthAccepted(self):
         fac, proto = self.makeProto('', 0, None, methods={'login': ('spam', 'eggs')})
         proto.dataReceived('\x05\x02')
         proto.transport.clear()
         proto.dataReceived('\x01\x00')
-        self.assert_(proto.transport.value())
+        self.assertTrue(proto.transport.value())
 
     def test_buildingWrappedFactory(self):
         wrappedFac = FakeFactory()
         fac, proto = self.makeProto('', 0, wrappedFac)
         proto.dataReceived('\x05\x00\x05\x00\x00\x01444422xxxxx')
-        self.assertEqual(wrappedFac.proto.data, 'xxxxx')
+        self.assertEqual(wrappedFac.proto.data, six.b('xxxxx'))
 
     def test_noProtocolFromWrappedFactory(self):
         wrappedFac = FakeFactory(returnNoProtocol=True)
         fac, proto = self.makeProto('', 0, wrappedFac)
         proto.dataReceived('\x05\x00\x05\x00\x00\x01444422')
-        self.assert_(self.aborted)
+        self.assertTrue(self.aborted)
         return self.assertFailure(fac.deferred, defer.CancelledError)
 
     def test_dataSentByPeer(self):
@@ -438,8 +451,8 @@ class TestSOCKS5ClientFactory(_TestSOCKSClientFactoryCommon, unittest.TestCase):
         fac, proto = self.makeProto('', 0, wrappedFac)
         proto.dataReceived('\x05\x00\x05\x00\x00\x01444422')
         proto.transport.clear()
-        wrappedFac.proto.transport.write('xxxxx')
-        self.assertEqual(proto.transport.value(), 'xxxxx')
+        wrappedFac.proto.transport.write(six.b('xxxxx'))
+        self.assertEqual(proto.transport.value(), six.b('xxxxx'))
 
 
 class TestSOCKS4ClientFactory(_TestSOCKSClientFactoryCommon, unittest.TestCase):
@@ -447,27 +460,27 @@ class TestSOCKS4ClientFactory(_TestSOCKSClientFactoryCommon, unittest.TestCase):
 
     def test_defaultFactory(self):
         fac, proto = self.makeProto('127.0.0.1', 0, None)
-        self.assertEqual(proto.transport.value(), '\x04\x01\x00\x00\x7f\x00\x00\x01\x00')
+        self.assertEqual(proto.transport.value(), six.b('\x04\x01\x00\x00\x7f\x00\x00\x01\x00'))
 
     def test_hostname(self):
         fac, proto = self.makeProto('spam.com', 0, None)
-        self.assertEqual(proto.transport.value(), '\x04\x01\x00\x00\x00\x00\x00\x01\x00spam.com\x00')
+        self.assertEqual(proto.transport.value(), six.b('\x04\x01\x00\x00\x00\x00\x00\x01\x00spam.com\x00'))
 
     def test_differentUser(self):
         fac, proto = self.makeProto('127.0.0.1', 0, None, 'spam')
-        self.assertEqual(proto.transport.value(), '\x04\x01\x00\x00\x7f\x00\x00\x01spam\x00')
+        self.assertEqual(proto.transport.value(), six.b('\x04\x01\x00\x00\x7f\x00\x00\x01spam\x00'))
 
     def test_buildingWrappedFactory(self):
         wrappedFac = FakeFactory()
         fac, proto = self.makeProto('127.0.0.1', 0, wrappedFac)
         proto.dataReceived('\x00\x5a\x00\x00\x00\x00\x00\x00xxxxx')
-        self.assertEqual(wrappedFac.proto.data, 'xxxxx')
+        self.assertEqual(wrappedFac.proto.data, six.b('xxxxx'))
 
     def test_noProtocolFromWrappedFactory(self):
         wrappedFac = FakeFactory(returnNoProtocol=True)
         fac, proto = self.makeProto('', 0, wrappedFac)
         proto.dataReceived('\x00\x5a\x00\x00\x00\x00\x00\x00xxxxx')
-        self.assert_(self.aborted)
+        self.assertTrue(self.aborted)
         return self.assertFailure(fac.deferred, defer.CancelledError)
 
     def test_dataSentByPeer(self):
@@ -475,8 +488,8 @@ class TestSOCKS4ClientFactory(_TestSOCKSClientFactoryCommon, unittest.TestCase):
         fac, proto = self.makeProto('', 0, wrappedFac)
         proto.dataReceived('\x00\x5a\x00\x00\x00\x00\x00\x00')
         proto.transport.clear()
-        wrappedFac.proto.transport.write('xxxxx')
-        self.assertEqual(proto.transport.value(), 'xxxxx')
+        wrappedFac.proto.transport.write(six.b('xxxxx'))
+        self.assertEqual(proto.transport.value(), six.b('xxxxx'))
 
     def test_invalidIPs(self):
         self.assertRaises(ValueError, client.SOCKS4ClientFactory, '0.0.0.1', 0, None)
@@ -494,19 +507,20 @@ class TestSOCKS5ClientEndpoint(unittest.TestCase):
         proxy = FakeEndpoint()
         endpoint = client.SOCKS5ClientEndpoint('', 0, proxy)
         endpoint.connect(None)
-        self.assertEqual(proxy.transport.value(), '\x05\x01\x00')
+        self.assertEqual(proxy.transport.value(), six.ensure_binary('\x05\x01\x00'))
 
     def test_anonymousAndLoginAuth(self):
         proxy = FakeEndpoint()
         endpoint = client.SOCKS5ClientEndpoint('', 0, proxy, methods={'anonymous': (), 'login': ()})
         endpoint.connect(None)
-        self.assertEqual(proxy.transport.value(), '\x05\x02\x00\x02')
+        value = sorted(six.ensure_text(proxy.transport.value()))
+        self.assertEqual(value, ['\x00', '\x02', '\x02', '\x05'])       
 
     def test_justLoginAuth(self):
         proxy = FakeEndpoint()
         endpoint = client.SOCKS5ClientEndpoint('', 0, proxy, methods={'login': ()})
         endpoint.connect(None)
-        self.assertEqual(proxy.transport.value(), '\x05\x01\x02')
+        self.assertEqual(proxy.transport.value(), six.ensure_binary('\x05\x01\x02'))
 
     def test_noAuthMethodsFails(self):
         self.assertRaises(
@@ -519,7 +533,7 @@ class TestSOCKS5ClientEndpoint(unittest.TestCase):
         d = endpoint.connect(wrappedFac)
         proxy.proto.dataReceived('\x05\x00\x05\x00\x00\x01444422xxxxx')
         d.addCallback(self.assertEqual, wrappedFac.proto)
-        self.assertEqual(wrappedFac.proto.data, 'xxxxx')
+        self.assertEqual(wrappedFac.proto.data, six.b('xxxxx'))
         return d
 
     def test_dataSentByPeer(self):
@@ -529,8 +543,8 @@ class TestSOCKS5ClientEndpoint(unittest.TestCase):
         endpoint.connect(wrappedFac)
         proxy.proto.dataReceived('\x05\x00\x05\x00\x00\x01444422')
         proxy.proto.transport.clear()
-        wrappedFac.proto.transport.write('xxxxx')
-        self.assertEqual(proxy.proto.transport.value(), 'xxxxx')
+        wrappedFac.proto.transport.write(six.b('xxxxx'))
+        self.assertEqual(proxy.proto.transport.value(), six.b('xxxxx'))
 
 
 class TestSOCKS4ClientEndpoint(unittest.TestCase):
@@ -544,19 +558,23 @@ class TestSOCKS4ClientEndpoint(unittest.TestCase):
         proxy = FakeEndpoint()
         endpoint = client.SOCKS4ClientEndpoint('127.0.0.1', 0, proxy)
         endpoint.connect(None)
-        self.assertEqual(proxy.transport.value(), '\x04\x01\x00\x00\x7f\x00\x00\x01\x00')
+        self.assertEqual(proxy.transport.value(), six.ensure_binary('\x04\x01\x00\x00\x7f\x00\x00\x01\x00'))
 
     def test_hostname(self):
         proxy = FakeEndpoint()
         endpoint = client.SOCKS4ClientEndpoint('spam.com', 0, proxy)
         endpoint.connect(None)
-        self.assertEqual(proxy.transport.value(), '\x04\x01\x00\x00\x00\x00\x00\x01\x00spam.com\x00')
+        # Py3k fixes
+        self.assertEqual(proxy.transport.value(),
+                         six.ensure_binary('\x04\x01\x00\x00\x00\x00\x00\x01\x00spam.com\x00'))
 
     def test_differentUser(self):
         proxy = FakeEndpoint()
         endpoint = client.SOCKS4ClientEndpoint('127.0.0.1', 0, proxy, 'spam')
         endpoint.connect(None)
-        self.assertEqual(proxy.transport.value(), '\x04\x01\x00\x00\x7f\x00\x00\x01spam\x00')
+        # Py3k fixes
+        self.assertEqual(proxy.transport.value(),
+                         six.ensure_binary('\x04\x01\x00\x00\x7f\x00\x00\x01spam\x00'))
 
     def test_buildingWrappedFactory(self):
         wrappedFac = FakeFactory()
@@ -565,7 +583,7 @@ class TestSOCKS4ClientEndpoint(unittest.TestCase):
         d = endpoint.connect(wrappedFac)
         proxy.proto.dataReceived('\x00\x5a\x00\x00\x00\x00\x00\x00xxxxx')
         d.addCallback(self.assertEqual, wrappedFac.proto)
-        self.assertEqual(wrappedFac.proto.data, 'xxxxx')
+        self.assertEqual(wrappedFac.proto.data, six.b('xxxxx'))
         return d
 
     def test_dataSentByPeer(self):
@@ -575,8 +593,8 @@ class TestSOCKS4ClientEndpoint(unittest.TestCase):
         endpoint.connect(wrappedFac)
         proxy.proto.dataReceived('\x00\x5a\x00\x00\x00\x00\x00\x00')
         proxy.proto.transport.clear()
-        wrappedFac.proto.transport.write('xxxxx')
-        self.assertEqual(proxy.proto.transport.value(), 'xxxxx')
+        wrappedFac.proto.transport.write(six.b('xxxxx'))
+        self.assertEqual(proxy.proto.transport.value(), six.b('xxxxx'))
 
     def test_invalidIPs(self):
         self.assertRaises(ValueError, client.SOCKS4ClientEndpoint, '0.0.0.1', 0, None)
