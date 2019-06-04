@@ -1,8 +1,10 @@
 # Copyright (c) Aaron Gallagher <_@habnab.it>
 # See COPYING for details.
 
+import six
+
 from twisted.internet import defer, protocol
-from twisted.protocols.basic import NetstringReceiver
+from twisted.protocols.basic import NetstringReceiver, _formatNetstring
 
 from txsocksx.test.util import (
     FakeEndpoint, SyncDeferredsTestCase, UppercaseWrapperFactory)
@@ -16,9 +18,11 @@ class NetstringTracker(NetstringReceiver):
     def stringReceived(self, string):
         self.strings.append(string)
 
+    def sendString(self, string):
+        self.transport.write(_formatNetstring(six.ensure_binary(string)))
+                             
 class NetstringFactory(protocol.ClientFactory):
     protocol = NetstringTracker
-
 
 class FakeError(Exception):
     pass
@@ -39,7 +43,7 @@ class TLSWrapClientEndpointTestCase(SyncDeferredsTestCase):
         """
         proto = self.successResultOf(self.wrapper.connect(self.factory))
         self.endpoint.proto.dataReceived('5:hello,')
-        self.assertEqual(proto.strings, ['HELLO'])
+        self.assertEqual(proto.strings, [six.b('HELLO')])
 
     def test_methodsAvailable(self):
         """
@@ -48,7 +52,7 @@ class TLSWrapClientEndpointTestCase(SyncDeferredsTestCase):
         """
         proto = self.successResultOf(self.wrapper.connect(self.factory))
         proto.sendString('spam')
-        self.assertEqual(self.endpoint.transport.value(), '4:SPAM,')
+        self.assertEqual(self.endpoint.transport.value(), six.b('4:SPAM,'))
 
     def test_connectionFailure(self):
         """
