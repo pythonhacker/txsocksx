@@ -15,14 +15,10 @@ from twisted.internet import protocol, defer, interfaces
 from zope.interface import implementer
 
 import txsocksx.constants as c, txsocksx.errors as e
-import six
-
 from txsocksx import grammar
-
 
 def socks_host(host):
     # PY3KPORT: Py2-3 compatible port using six
-    # import pdb;pdb.set_trace()
     x = c.ATYP_DOMAINNAME
     return six.int2byte(x) + six.int2byte(len(host)) + six.ensure_binary(host)
 
