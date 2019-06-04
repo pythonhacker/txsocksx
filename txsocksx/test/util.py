@@ -1,6 +1,7 @@
 # Copyright (c) Aaron Gallagher <_@habnab.it>
 # See COPYING for details.
 
+import six
 from twisted.internet import defer
 from twisted.protocols import policies
 from twisted.python import failure
@@ -32,14 +33,14 @@ class FakeEndpoint(object):
 
 class UppercaseWrapperProtocol(policies.ProtocolWrapper):
     def dataReceived(self, data):
-        policies.ProtocolWrapper.dataReceived(self, data.upper())
+        policies.ProtocolWrapper.dataReceived(self, six.ensure_binary(data.upper()))
 
     def write(self, data):
-        policies.ProtocolWrapper.write(self, data.upper())
+        policies.ProtocolWrapper.write(self, six.ensure_binary(data.upper()))
 
     def writeSequence(self, seq):
         for data in seq:
-            self.write(data)
+            self.write(six.ensure_binary(data))
 
 class UppercaseWrapperFactory(policies.WrappingFactory):
     protocol = UppercaseWrapperProtocol
