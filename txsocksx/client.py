@@ -22,11 +22,14 @@ from txsocksx import grammar
 
 def socks_host(host):
     # PY3KPORT: Py2-3 compatible port using six
-    return six.b(chr(c.ATYP_DOMAINNAME) + chr(len(host)) + host)
+    # import pdb;pdb.set_trace()
+    x = c.ATYP_DOMAINNAME
+    return six.int2byte(x) + six.int2byte(len(host)) + six.ensure_binary(host)
 
 def validateSOCKS4aHost(host):
+
     try:
-        host = socket.inet_pton(socket.AF_INET, host)
+        host = socket.inet_pton(socket.AF_INET, six.ensure_text(host))
     except socket.error:
         return
 
@@ -93,14 +96,13 @@ class SOCKS5Sender(object):
     def sendAuthMethods(self, methods):
         # PY3KPORT: Py2-3 compatible port using six     
         self.transport.write(
-            struct.pack('!BB', c.VER_SOCKS5, len(methods)) + six.b(''.join(methods)))
+            struct.pack('!BB', c.VER_SOCKS5, len(methods)) + six.ensure_binary(''.join(methods)))
 
     def sendLogin(self, username, password):
         # PY3KPORT: Py2-3 compatible port using six             
         try:
-            data = six.b('\x01'
-                         + chr(len(username)) + username
-                         + chr(len(password)) + password)
+            data = six.b('\x01') + six.int2byte(len(username)) + six.ensure_binary(username) + \
+                   six.int2byte(len(password)) + six.ensure_binary(password)
             self.transport.write(data)
         except Exception as e:
             err = e
@@ -266,15 +268,15 @@ class SOCKS4Sender(object):
         data = struct.pack('!BBH', c.VER_SOCKS4, c.CMD_CONNECT, port)
         try:
             # this returns bytes
-            host = socket.inet_pton(socket.AF_INET, host)
+            host = socket.inet_pton(socket.AF_INET, six.ensure_text(host))
         except socket.error:
             # PY3KPORT: Py2-3 compatible port using six                 
-            host, suffix = six.b('\0\0\0\1'), six.ensure_binary(host) + b'\0'
+            host, suffix = six.b('\0\0\0\1'), six.ensure_binary(host) + six.b('\0')
         else:
             suffix = six.b('')
 
         # PY3KPORT: Py2-3 compatible port using six                         
-        rest = host + six.ensure_binary(user) + b'\0' + suffix
+        rest = host + six.ensure_binary(user) + six.b('\0') + six.ensure_binary(suffix)
         self.transport.write(data + rest)
 
 
