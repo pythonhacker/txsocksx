@@ -9,6 +9,7 @@ This requires Twisted 12.1 or greater to use.
 
 
 import twisted
+import six
 from twisted.python.versions import Version
 from twisted.web.client import Agent, SchemeNotSupported
 
@@ -39,8 +40,13 @@ if twisted.version >= _twisted_15_0:
             self._wrappedAgent = _Agent.usingEndpointFactory(
                 reactor, self, pool=pool)
 
-        def request(self, *a, **kw):
-            return self._wrappedAgent.request(*a, **kw)
+        def request(self, method, uri, **kw):
+            # PY3KPORT: URIs must be in bytes
+            uri = six.ensure_binary(uri)
+            # PY3KPORT: Method to be in bytes
+            # What about headers ?
+            method = six.ensure_binary(method)
+            return self._wrappedAgent.request(method, uri, **kw)
 
         def endpointForURI(self, uri):
             return self._getEndpoint(uri.scheme, uri.host, uri.port)
@@ -58,7 +64,8 @@ class _SOCKSAgent(Agent):
         super(_SOCKSAgent, self).__init__(*a, **kw)
 
     def _getEndpoint(self, scheme, host, port):
-        if scheme not in ('http', 'https'):
+        # PY3KPORT: Ensure text comparison
+        if six.ensure_str(scheme) not in ('http', 'https'):
             raise SchemeNotSupported('unsupported scheme', scheme)
         endpoint = self.endpointFactory(
             host, port, self.proxyEndpoint, **self.endpointArgs)
